@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>吃什麼幫我選！</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Noto Sans TC', sans-serif;
+      display: flex;
+      background-color: #fffaf2;
+    }
+    aside {
+      width: 200px;
+      background-color: #fff0d6;
+      height: 100vh;
+      padding: 20px;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    }
+    aside h2 {
+      font-size: 20px;
+      margin-bottom: 30px;
+      color: #d9480f;
+    }
+    aside button {
+      display: block;
+      width: 100%;
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #ffa94d;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    main {
+      flex: 1;
+      padding: 30px;
+      overflow-y: auto;
+    }
+    #bear {
+      height: 300px;
+      margin-right: 20px;
+    }
+    #wheel-canvas {
+      margin: 20px auto;
+      display: block;
+      border: 6px solid #ffa94d;
+      border-radius: 50%;
+    }
+    #recommendations, #home-recommend {
+      display: flex;
+      overflow-x: auto;
+      gap: 20px;
+      padding: 10px 0;
+    }
+    .card {
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      padding: 15px;
+      width: 260px;
+      flex: 0 0 auto;
+      text-align: left;
+    }
+    .card h3 { color: #d9480f; margin-bottom: 5px; }
+    .card p { margin: 4px 0; color: #333; font-size: 15px; }
+    .card button {
+      background-color: #ff9f43;
+      border: none;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    #map {
+      height: 400px;
+      margin-top: 20px;
+      border-radius: 12px;
+    }
+    select, input[type=range], input[type=text] {
+      padding: 8px;
+      margin: 8px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+    <aside>
+      <h2>🍽 功能選單</h2>
+      <button onclick="showPage('home')">🏠 首頁</button>
+      <button onclick="showPage('spin')">🎡 今天要吃什麼</button>
+      <button onclick="showPage('add')">➕ 新增美食卡片</button>
+    </aside>
+  
+    <main>
+      <!-- 主頁內容 -->
+      <div id="home" style="display:block">
+        <h1>🍱 個人化美食推薦</h1>
+        <input type="text" id="searchInput" placeholder="🔍 搜尋店名或類型...">
+        
+        <label>我是...</label>
+        <select id="user-type">
+          <option value="student">學生</option>
+          <option value="office">小資族</option>
+          <option value="fitness">健身族</option>
+        </select>
+  
+        <label>所在城市</label>
+        <select id="city">
+          <option value="花蓮">花蓮</option>
+          <option value="台北">台北</option>
+          <option value="桃園">桃園</option>
+          <option value="台南">台南</option>
+          <option value="宜蘭">宜蘭</option>
+        </select>
+  
+        <label>預算上限</label>
+        <input type="range" id="price-range" min="50" max="400" value="200" step="10">
+        <div id="price-display">200 元</div>
+  
+        <label>偏好美食類別</label>
+        <select id="food-type">
+          <option value="">請選擇</option>
+          <option value="🍜 拉麵">🍜 拉麵</option>
+          <option value="🍰 甜點">🍰 甜點</option>
+          <option value="🍚 中式小吃">🍚 中式小吃</option>
+          <option value="🍱 日式小吃">🍱 日式小吃</option>
+          <option value="🍛 咖哩">🍛 咖哩</option>
+          <option value="🥗 輕食">🥗 輕食</option>
+          <option value="🍕 異國料理">🍕 異國料理</option>
+          <option value="🥦 健康餐">🥦 健康餐</option>
+        </select>
+  
+        <button onclick="manualRecommend()">推薦美食</button>
+        <div id="home-recommend"></div>
+        <div id="map"></div>
+      </div>
+  
+      <!-- 轉盤頁面 -->
+      <div id="spin" style="display:none">
+        <h1>🍴 今天吃什麼？讓美食轉盤幫你決定！</h1>
+        <div style="display: flex; align-items: center; justify-content: center;">
+          <img src="quokka.png" alt="可愛熊" id="bear">
+          <canvas id="wheel-canvas" width="300" height="300"></canvas>
+        </div>
+        <button onclick="spinWheel()">轉一下 🎡</button>
+        <p id="spin-result"></p>
+        <div id="recommendations"></div>
+      </div>
+  
+      <!-- 新增卡片頁面 -->
+      <div id="add" style="display:none">
+        <h2>➕ 新增你的私藏美食</h2>
+        <section id="add-form-section">
+          <input type="text" id="add-name" placeholder="店名">
+          <input type="text" id="add-type" placeholder="類型">
+          <input type="text" id="add-city" placeholder="城市">
+          <input type="text" id="add-address" placeholder="地址">
+          <input type="text" id="add-price" placeholder="價格">
+          <input type="text" id="add-rating" placeholder="評分">
+          <textarea id="add-note" placeholder="推薦語"></textarea>
+          <button onclick="addCard()">新增美食推薦</button>
+        </section>
+        <section id="user-added"></section>
+      </div>
+    </main>
+    <audio id="bg-music" src="happy-music.mp3"></audio>
+    <script src="recommendations.js"></script>
+    <script>
+      const map = L.map('map').setView([23.9911, 121.6027], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+  
+      const pages = {
+        home: document.getElementById("home"),
+        spin: document.getElementById("spin"),
+        add: document.getElementById("add")
+      };
+      const music = document.getElementById("bg-music");
+  
+      function showPage(id) {
+        Object.keys(pages).forEach(key => pages[key].style.display = "none");
+        pages[id].style.display = "block";
+        if (id === 'spin') music.play();
+        else music.pause();
+      }
+  
+      document.getElementById("price-range").addEventListener("input", () => {
+        document.getElementById("price-display").textContent = `${document.getElementById("price-range").value} 元`;
+      });
+  
+      function createCard(item) {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <h3>${item.name}</h3>
+          <p>類型：${item.type}</p>
+          <p>價格：${item.price}</p>
+          <p>評分：${item.rating}</p>
+          <p>推薦語：${item.note}</p>
+        `;
+        const btn = document.createElement("button");
+        btn.textContent = "💖 收藏";
+        btn.onclick = () => {
+          if (item.lat && item.lon) {
+            L.marker([item.lat, item.lon]).addTo(map).bindPopup(item.name);
+            alert(`${item.name} 已加入地圖收藏！`);
+          } else {
+            alert("本項目無座標資料，無法加入地圖。");
+          }
+        };
+        card.appendChild(btn);
+        return card;
+      }
+  
+      function manualRecommend() {
+        const type = document.getElementById("food-type").value;
+        const city = document.getElementById("city").value;
+        const price = parseInt(document.getElementById("price-range").value);
+        const resultArea = document.getElementById("home-recommend");
+        resultArea.innerHTML = "";
+  
+        if (recommendationsData[type]) {
+          const matched = recommendationsData[type].filter(item => parseInt(item.price) <= price && (!item.city || item.city === city));
+          if (matched.length === 0) {
+            resultArea.innerHTML = "<p>該搜尋項目無符合條件</p>";
+          } else {
+            matched.forEach(item => resultArea.appendChild(createCard(item)));
+          }
+        }
+      }
+  
+      document.getElementById("searchInput").addEventListener("input", function () {
+        const keyword = this.value.toLowerCase();
+        document.querySelectorAll(".card").forEach(card => {
+          const text = card.innerText.toLowerCase();
+          card.style.display = text.includes(keyword) ? "block" : "none";
+        });
+      });
+  
+      // 轉盤邏輯
+      const options = ["🍜 拉麵", "🍰 甜點", "🍚 中式小吃", "🍱 日式小吃", "🍛 咖哩", "🥗 輕食", "🍕 異國料理", "🥦 健康餐"];
+      const canvas = document.getElementById("wheel-canvas");
+      const ctx = canvas.getContext("2d");
+      const arc = Math.PI * 2 / options.length;
+  
+      function drawWheel() {
+        for (let i = 0; i < options.length; i++) {
+          const angle = i * arc;
+          ctx.beginPath();
+          ctx.fillStyle = i % 2 === 0 ? "#ffd580" : "#ffe0b3";
+          ctx.moveTo(150, 150);
+          ctx.arc(150, 150, 150, angle, angle + arc);
+          ctx.fill();
+          ctx.save();
+          ctx.translate(150, 150);
+          ctx.rotate(angle + arc / 2);
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#333";
+          ctx.font = "16px sans-serif";
+          ctx.fillText(options[i], 80, 6);
+          ctx.restore();
+        }
+      }
+      drawWheel();
+  
+      function spinWheel() {
+        const rotation = 360 * 5 + Math.floor(Math.random() * 360);
+        canvas.style.transition = "transform 4s ease-out";
+        canvas.style.transform = `rotate(${rotation}deg)`;
+  
+        const index = Math.floor(((360 - (rotation % 360)) % 360) / (360 / options.length));
+        const selected = options[index];
+  
+        setTimeout(() => {
+          document.getElementById("spin-result").innerText = `你今天可以試試看：${selected}`;
+          showRecommendations(selected);
+        }, 4000);
+      }
+  
+      function showRecommendations(type) {
+        const resultArea = document.getElementById("recommendations");
+        resultArea.innerHTML = "";
+        if (recommendationsData[type]) {
+          recommendationsData[type].slice(0, 5).forEach(item => {
+            resultArea.appendChild(createCard(item));
+          });
+        }
+      }
+  
+      function addCard() {
+        // 簡化示範：實際開發可串接地址轉經緯度 API
+        const name = document.getElementById("add-name").value;
+        const type = document.getElementById("add-type").value;
+        const city = document.getElementById("add-city").value;
+        const address = document.getElementById("add-address").value;
+        const price = document.getElementById("add-price").value;
+        const rating = document.getElementById("add-rating").value;
+        const note = document.getElementById("add-note").value;
+  
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <h3>${name}</h3>
+          <p>類型：${type}</p>
+          <p>價格：${price}</p>
+          <p>評分：${rating}</p>
+          <p>城市：${city}</p>
+          <p>地址：${address}</p>
+          <p>推薦語：${note}</p>
+        `;
+        document.getElementById("user-added").appendChild(card);
+      }
+    </script>
+  </body>
+  </html>
+    
